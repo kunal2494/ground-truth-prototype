@@ -4,6 +4,7 @@ const sharedSources = [
     name: "Anjanava Biswas",
     role: "Engineering leader",
     company: "Packt Agentic Engineering contributor",
+    socialProfile: "https://www.linkedin.com/in/anjanava-biswas/",
     sourceType: "Interview",
     sourceTitle: "Agentic Engineering interview",
     date: "July 2026",
@@ -15,6 +16,7 @@ const sharedSources = [
     name: "Armin Ranjbaryan",
     role: "CTO",
     company: "Practitioner contributor",
+    socialProfile: "https://www.linkedin.com/in/armin-ranjbaryan/",
     sourceType: "Expert insight",
     sourceTitle: "Agentic Engineering leadership note",
     date: "July 2026",
@@ -26,6 +28,7 @@ const sharedSources = [
     name: "Ben Auffarth",
     role: "Author / AI practitioner",
     company: "Packt author",
+    socialProfile: "https://www.linkedin.com/in/ben-auffarth/",
     sourceType: "Workshop",
     sourceTitle: "Building Reliable AI Agents with LangChain4j",
     date: "18 Jul 2026",
@@ -182,6 +185,13 @@ const nextStepOptions = [
     text: "You're a cited expert · citation usage starts tracking",
     detail: "Your dashboard shows where the contribution appears, how often it is cited, and the usage trail that can support future royalties.",
   },
+];
+
+const workflowFollowUpActions = [
+  "Create Claude skill",
+  "Write AGENTS.md instruction",
+  "Copy agent-ready prompt",
+  "Turn into review checklist",
 ];
 
 const answers = {
@@ -1083,7 +1093,7 @@ function AnswerWorkspace() {
   return `
     <section class="answer-container">
       ${QuestionHeader(answer)}
-      ${answer.outcome === "ground-truth-answer" ? ExpertPanel(answer.citedFrom) : ""}
+      ${answer.outcome === "ground-truth-answer" ? ExpertPanel(answer) : ""}
       ${renderAnswerLayout(answer)}
       ${answer.outcome === "ground-truth-answer" ? CollapsedSourceDetail(answer.citedFrom) : ""}
       ${FollowUpActions(answer)}
@@ -1106,28 +1116,137 @@ function QuestionHeader(answer) {
   `;
 }
 
-function ExpertPanel(sources) {
+function ExpertPanel(answer) {
   return `
     <section class="answer-section expert-panel">
-      <h3>Answered using insights from</h3>
-      <div class="expert-row">
-        ${sources.map(ExpertAvatarCard).join("")}
+      <h3>Expert positions behind this answer</h3>
+      <div class="expert-answer-grid">
+        ${answer.citedFrom.map((source, index) => ExpertAnswerCard(source, answer, index)).join("")}
       </div>
     </section>
   `;
 }
 
-function ExpertAvatarCard(source) {
+function ExpertAnswerCard(source, answer, index) {
+  const detail = ExpertAnswerDetail(answer, index, source);
+  const selectedClass = detail.selectable && state.selectedApproach === index ? "is-selected" : "";
   return `
-    <article class="expert-avatar-card">
-      ${ExpertPortrait(source)}
+    <article class="expert-answer-card ${selectedClass}">
+      <header>
+        ${ExpertPortrait(source)}
+        <div>
+          <strong>${escapeHtml(source.name)}</strong>
+          <div class="mini-meta">${escapeHtml(source.role || "Expert contributor")}</div>
+          <div class="mini-meta">${escapeHtml(source.company || "Independent practitioner")}</div>
+          ${source.socialProfile ? `<a href="${escapeHtml(source.socialProfile)}" target="_blank" rel="noreferrer">Social profile</a>` : ""}
+        </div>
+      </header>
+      <div class="source-date-line">${escapeHtml(SourceDateLabel(source))}</div>
       <div>
-        <strong>${escapeHtml(source.name)}</strong>
-        <div class="mini-meta">${escapeHtml(source.role || "Expert contributor")}</div>
-        <div class="mini-meta">${escapeHtml(source.date || "Fresh corpus source")}</div>
+        <div class="label">${escapeHtml(detail.label)}</div>
+        <h4>${escapeHtml(detail.title)}</h4>
+        <p>${escapeHtml(detail.position)}</p>
       </div>
+      <div class="expert-detail-grid">
+        <div>
+          <div class="label">Trade-off</div>
+          <p>${escapeHtml(detail.tradeoff)}</p>
+        </div>
+        <div>
+          <div class="label">Risk / caution</div>
+          <p>${escapeHtml(detail.risk)}</p>
+        </div>
+      </div>
+      ${detail.bestFor?.length ? `<div><div class="label">Best when</div><ul class="plain-list">${detail.bestFor.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>` : ""}
+      ${detail.selectable ? `<button class="choice-button" data-approach="${index}">${escapeHtml(detail.ctaLabel)}</button>` : ""}
     </article>
   `;
+}
+
+function ExpertAnswerDetail(answer, index, source) {
+  const approach = answer.approaches?.[index];
+  if (approach) {
+    return {
+      label: "Expert-backed position",
+      title: approach.title,
+      position: approach.summary,
+      tradeoff: approach.mainRisk || "Different teams will need different operating models.",
+      risk: approach.expertSourceSupport || source.relevantClaim,
+      bestFor: approach.bestFor || [],
+      selectable: answer.layout === "expert-decision-answer",
+      ctaLabel: approach.ctaLabel || "Use this route",
+    };
+  }
+
+  const expertPosition = answer.expertPositions?.[index];
+  if (expertPosition) {
+    return {
+      label: "Expert-backed position",
+      title: expertPosition.position,
+      position: expertPosition.summary,
+      tradeoff: expertPosition.tradeoff || "Different adoption speeds carry different risk.",
+      risk: source.relevantClaim,
+      bestFor: expertPosition.bestSuitedFor ? [expertPosition.bestSuitedFor] : [],
+    };
+  }
+
+  const failure = answer.failureModes?.[index];
+  if (failure) {
+    return {
+      label: "Risk lens",
+      title: failure.failureMode,
+      position: source.relevantClaim,
+      tradeoff: failure.mitigation,
+      risk: failure.warningSign,
+      bestFor: [],
+    };
+  }
+
+  const guardrail = answer.guardrails?.[index];
+  if (guardrail) {
+    return {
+      label: "Workflow guardrail",
+      title: guardrail.guardrail,
+      position: source.relevantClaim,
+      tradeoff: guardrail.purpose,
+      risk: answer.workflow?.[index] || "Without this guardrail, reviewers may miss system-level intent.",
+      bestFor: [],
+    };
+  }
+
+  if (answer.explanation) {
+    const explainerDetails = [
+      ["Plain-language view", answer.explanation.plainLanguage, answer.explanation.whyItMatters],
+      ["Common mistake", answer.explanation.commonMistake, answer.explanation.example],
+      ["Review lens", source.relevantClaim, answer.agentPrompt],
+    ];
+    const [title, position, risk] = explainerDetails[index] || explainerDetails[0];
+    return {
+      label: "Explainer lens",
+      title,
+      position,
+      tradeoff: answer.explanation.whyItMatters,
+      risk,
+      bestFor: [],
+    };
+  }
+
+  return {
+    label: "Source claim",
+    title: source.sourceTitle,
+    position: source.relevantClaim,
+    tradeoff: "Use this claim with human review and clear ownership.",
+    risk: "Do not generalize beyond the cited source context.",
+    bestFor: [],
+  };
+}
+
+function SourceDateLabel(source) {
+  const date = source.date || "Corpus source";
+  const type = (source.sourceType || "").toLowerCase();
+  if (type.includes("book")) return `Book published: ${date}`;
+  if (type.includes("workshop") || type.includes("event") || type.includes("talk")) return `Event date: ${date}`;
+  return `Corpus finalized: ${date}`;
 }
 
 function ExpertPortrait(source) {
@@ -1190,12 +1309,6 @@ function NoGroundTruthAnswer(answer) {
 function DecisionPanel(answer) {
   return `
     <section class="answer-section">
-      <h3>Expert discussion</h3>
-      <div class="approach-grid">
-        ${answer.approaches.map((approach, index) => ExpertApproachCard(approach, index)).join("")}
-      </div>
-    </section>
-    <section class="answer-section">
       <h3>Consensus answer</h3>
       <p>${escapeHtml(answer.directAnswer)}</p>
     </section>
@@ -1212,12 +1325,6 @@ function DecisionPanel(answer) {
 
 function ComparisonBoard(answer) {
   return `
-    <section class="answer-section">
-      <h3>Expert discussion</h3>
-      <div class="approach-grid">
-        ${answer.approaches.map((approach, index) => ExpertOptionCard(approach, index)).join("")}
-      </div>
-    </section>
     ${answer.expertDisagreement ? `
       <section class="answer-section">
         <h3>Where experts differ</h3>
@@ -1238,7 +1345,6 @@ function ComparisonBoard(answer) {
 
 function RiskRegister(answer) {
   return `
-    ${ExpertDiscussionCards(answer.citedFrom)}
     <section class="answer-section">
       <h3>Risk summary</h3>
       <p>${escapeHtml(answer.directAnswer)}</p>
@@ -1260,7 +1366,6 @@ function RiskRegister(answer) {
 
 function WorkflowPlaybook(answer) {
   return `
-    ${ExpertDiscussionCards(answer.citedFrom)}
     <section class="answer-section">
       <h3>Recommended workflow</h3>
       <p>${escapeHtml(answer.directAnswer)}</p>
@@ -1296,25 +1401,6 @@ function WorkflowPlaybook(answer) {
 
 function ExpertPositionMap(answer) {
   return `
-    <section class="answer-section">
-      <h3>Expert discussion</h3>
-      <div class="position-grid">
-        ${answer.expertPositions
-          .map(
-            (position) => `
-              <article class="source-card">
-                <h4>${escapeHtml(position.position)}</h4>
-                <p>${escapeHtml(position.summary)}</p>
-                <div class="label">Best suited for</div>
-                <p>${escapeHtml(position.bestSuitedFor)}</p>
-                <div class="label">Trade-off</div>
-                <p>${escapeHtml(position.tradeoff || "Different teams will need different autonomy levels.")}</p>
-              </article>
-            `,
-          )
-          .join("")}
-      </div>
-    </section>
     ${answer.expertDisagreement ? `
       <section class="answer-section">
         <h3>Where experts disagree</h3>
@@ -1341,7 +1427,6 @@ function ExpertPositionMap(answer) {
 function AttributedExplainer(answer) {
   const explanation = answer.explanation;
   return `
-    ${ExpertDiscussionCards(answer.citedFrom)}
     <section class="answer-section">
       <h3>Plain-language explanation</h3>
       <p>${escapeHtml(explanation.plainLanguage)}</p>
@@ -1364,25 +1449,6 @@ function AttributedExplainer(answer) {
       <h3>Related questions</h3>
       <div class="chips">
         ${(answer.relatedQuestions || []).map((question) => `<button class="chip" data-question="${escapeHtml(question)}">${escapeHtml(question)}</button>`).join("")}
-      </div>
-    </section>
-  `;
-}
-
-function ExpertDiscussionCards(sources) {
-  return `
-    <section class="answer-section">
-      <h3>Expert discussion</h3>
-      <div class="discussion-grid">
-        ${sources.map((source) => `
-          <article class="discussion-card">
-            ${ExpertPortrait(source)}
-            <div>
-              <strong>${escapeHtml(source.name.split(" ")[0])}</strong>
-              <p>${escapeHtml(source.relevantClaim)}</p>
-            </div>
-          </article>
-        `).join("")}
       </div>
     </section>
   `;
@@ -1542,11 +1608,12 @@ function AgentPromptCard(prompt) {
 }
 
 function FollowUpActions(answer) {
+  const actions = answer.outcome === "ground-truth-answer" ? workflowFollowUpActions : answer.followUpActions;
   return `
     <section class="answer-section">
-      <h3>Follow-up actions</h3>
+      <h3>Turn this answer into workflow action</h3>
       <div class="chips">
-        ${answer.followUpActions
+        ${actions
           .map((action) => `<button class="chip ${state.followUp === action ? "is-active" : ""}" data-follow-up="${escapeHtml(action)}">${escapeHtml(action)}</button>`)
           .join("")}
       </div>
@@ -1558,12 +1625,14 @@ function MockFollowUp(answer, followUp) {
   const lower = followUp.toLowerCase();
   let body = "Ground Truth would keep the same expert context and expand the practical next step without repeating the source detail.";
 
-  if (lower.includes("safest")) {
-    body = "Safest route: keep tasks small, require plan review, cap file count, reject unexplained dependencies, and assign a human owner before merge.";
-  } else if (lower.includes("balanced")) {
-    body = "Balanced route: allow scoped multi-file changes after plan review, with explicit ownership, dependency checks, and a small enough pull request for meaningful human review.";
-  } else if (lower.includes("fastest")) {
-    body = "Fastest route: permit broader agent execution only where CI, tests, ownership gates, rollback paths, and architecture review are already mature.";
+  if (lower.includes("claude skill")) {
+    body = "Claude skill draft: convert the expert answer into a repeatable review workflow with triggers, required inputs, step-by-step checks, and an output template for agentic engineering decisions.";
+  } else if (lower.includes("agents.md")) {
+    body = "AGENTS.md instruction: add the answer as a team operating rule so coding agents must expose scope, assumptions, risks, review steps, and human ownership before making production changes.";
+  } else if (lower.includes("copy agent-ready prompt")) {
+    body = answer.agentPrompt || "Ask the agent to declare scope, risk, assumptions, context gaps, and review requirements before it edits code.";
+  } else if (lower.includes("review checklist")) {
+    body = "Workflow checklist: define the task, inspect context, identify architecture risks, check dependencies, explain tests, assign ownership, and document rollback before merge.";
   } else if (lower.includes("policy")) {
     body = "Team policy: agent-generated work must expose scope, assumptions, affected files, dependency risks, and test meaning before a human reviewer approves merge.";
   } else if (lower.includes("prompt")) {
