@@ -1041,7 +1041,7 @@ function QuestionInput() {
       <div class="prompt-row">
         <label class="prompt-prefix">
           <span>&gt;</span>
-          <input value="${escapeHtml(state.query)}" name="query" placeholder="ask the team anything..." autocomplete="off" />
+          <input value="${escapeHtml(state.query)}" name="query" placeholder="ask experts anything about agentic engineering" autocomplete="off" />
         </label>
         <button class="ask-button" type="submit">Ask corpus</button>
       </div>
@@ -1067,8 +1067,7 @@ function AskGroundTruthEmptyState() {
   return `
     <section class="answer-container">
       <div class="empty-console">
-        corpus console idle<br />
-        select a question or enter your own to test answer routing, expert attribution, refusal behavior, follow-ups, and feedback capture
+        Ask about agentic engineering adoption, review workflows, production risks, team policies, architecture drift, context limits, or where coding agents fit in real software delivery.
       </div>
       ${SuggestedQuestions()}
     </section>
